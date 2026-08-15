@@ -16,6 +16,13 @@ https://github.com/user-attachments/assets/23187822-047e-45cc-b480-fe997bd55b86
 
 <img width="2630" height="1794" alt="6c4293e1bec2e935031bf0e986d6ec65" src="https://github.com/user-attachments/assets/dfdb875e-a1a8-4d4b-8340-353736b1708f" />
 
+## 📌 项目来源
+
+本项目是 [dsh-better-sidebar](https://github.com/omdsh-dev/DSH-better-sidebar) 的修改版/分支，并合并了原独立插件 `dsh-sidebar-telemetry` 的「运行状态 / Telemetry」功能。
+
+- 上游项目：https://github.com/omdsh-dev/DSH-better-sidebar
+- 本仓库：https://github.com/lihaiyang/dsh-better-sidebar
+
 ## ✨ 功能一览
 
 - **🗂️ 资源管理器**：懒加载目录树（根 = 会话 cwd）、点击在侧边栏打开、行尾 `@文件` 引用到输入框、右键复制路径
@@ -36,153 +43,83 @@ https://github.com/user-attachments/assets/23187822-047e-45cc-b480-fe997bd55b86
 
 ## 🚀 安装
 
+> 注意：本仓库是修改版，默认不会发布到 npm 的 `dsh-better-sidebar` 包名。
+> 直接执行 `dsh plugin --profile web add dsh-better-sidebar` 安装到的是上游原版，不是本仓库。
+> 请使用下面的源码安装或本地 tarball 安装。
+
 **前置**：已装好 DSH（`dsh web` 能正常运行），Node.js ≥ 20、pnpm ≥ 10。
 
-**macOS / Linux**（Windows 装了 Git Bash 或 WSL 也可）：
+### 方式一：源码安装 / 开发（推荐）
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/omdsh-dev/DSH-better-sidebar/main/scripts/install.sh | bash
+git clone https://github.com/lihaiyang/dsh-better-sidebar.git
+cd dsh-better-sidebar
+pnpm install
+pnpm build
 ```
 
-**Windows（PowerShell 5.1+ / pwsh）**：
+然后把 `~/.dsh/profiles/web/package.json` 的 `dependencies` 改为：
 
-```powershell
-irm https://raw.githubusercontent.com/omdsh-dev/DSH-better-sidebar/main/scripts/install.ps1 | iex
+```json
+"dsh-better-sidebar": "link:/绝对路径/dsh-better-sidebar"
 ```
 
-装完**重启 DSH 并硬刷新**（Cmd/Ctrl+Shift+R）即可看到侧边栏。
+并在 `~/.dsh/profiles/web/cordis.patch.yml` 追加挂载行：
 
-<details>
-<summary><b>指定版本 / 装完自动重启（可选）</b></summary>
-
-```sh
-# macOS / Linux
-curl -fsSL https://raw.githubusercontent.com/omdsh-dev/DSH-better-sidebar/main/scripts/install.sh | bash -s 0.10.3 --restart
-
-# Windows PowerShell
-& ([scriptblock]::Create((irm 'https://raw.githubusercontent.com/omdsh-dev/DSH-better-sidebar/main/scripts/install.ps1'))) -Version 0.10.3 -Restart
+```yaml
+- insert:
+    - id: better-sidebar
+      name: 'dsh-better-sidebar'
 ```
 
-不确定的话，可先加 `--dry-run`（PowerShell 用 `-DryRun`）预览步骤再执行。
-
-</details>
-
-<details>
-<summary><b>手动安装（逐步命令，想看清每一步）</b></summary>
-
-与一键脚本等价。**第 ③ 步可重复执行；①② 只需做一次。**
-
-**macOS / Linux（bash）**：
+最后在 profile 目录执行：
 
 ```sh
 cd ~/.dsh/profiles/web
-
-# ① 放行 node-pty / protobufjs 的构建脚本（pnpm 11 默认拦截；pnpm 10 可跳过）
-pnpm approve-builds --all
-
-# ② 放行「发布不足 24h」的新版本（装老版本可跳过；若已有该键，把下面那行并入其下即可）
-cat >> pnpm-workspace.yaml <<'EOF'
-minimumReleaseAgeExclude:
-  - dsh-better-sidebar
-EOF
-
-# ③ 安装并自动挂载（不带 @版本 = npm 的 latest；固定版本写 dsh-better-sidebar@0.10.3）
-npx -y --package @deepseek-ai/dsh dsh plugin --profile web add dsh-better-sidebar
+pnpm install
 ```
 
-**Windows（PowerShell）**：
+重启 DSH 并硬刷新（Cmd/Ctrl+Shift+R）即可看到侧边栏。
 
-```powershell
-cd ~\.dsh\profiles\web
-
-# ① 放行构建脚本
-pnpm approve-builds --all
-
-# ② 放行新版本（一次性；若已有该键，把 - dsh-better-sidebar 并入其下即可）
-Add-Content -Path pnpm-workspace.yaml -Value "`nminimumReleaseAgeExclude:`n  - dsh-better-sidebar"
-
-# ③ 安装并自动挂载
-npx -y --package @deepseek-ai/dsh dsh plugin --profile web add dsh-better-sidebar
-```
-
-</details>
-
-<details>
-<summary><b>脚本内部做了什么（技术细节）</b></summary>
-
-一键脚本自动完成 4 件事（全部幂等，可安全重复执行）：
-
-1. 预写 `allowBuilds`（node-pty / protobufjs），规避 pnpm 11 的构建脚本拦截；
-2. 预写 `minimumReleaseAgeExclude`，放行「发布不足 24 小时」的新版本；
-3. 执行 `dsh plugin --profile web add dsh-better-sidebar`：登记依赖 → 识别包内 `dsh.bundle.patch` → 自动注册进 `dsh.profile.bundles` 挂载；
-4. 清理旧版残留的手动挂载行，避免「双挂载」（页面出现两个侧边栏）。
-
-`curl | bash` / `irm | iex` 会执行远程代码——脚本已随仓库开源（`scripts/install.sh` / `scripts/install.ps1`），可先下载审阅。插件以 npm 包 `dsh-better-sidebar@0.10.3` 发布，通过 `dsh.bundle.patch`（随包的 `cordis.patch.yml`）由官方 CLI 自动挂载，**不修改 DSH 源码**。
-
-</details>
-
-<details>
-<summary><b>更新</b></summary>
+如果遇到 `Ignored build scripts`，先执行：
 
 ```sh
-dsh plugin --profile web add dsh-better-sidebar
+cd ~/.dsh/profiles/web
+pnpm approve-builds --all
+pnpm install
 ```
 
-或重跑一次一键脚本；也可把 `~/.dsh/profiles/web/package.json` 里的版本号改高后 `pnpm install`。改完**重启 DSH 并硬刷新**（Cmd/Ctrl+Shift+R）。
+### 方式二：tarball 安装（有发布包时）
 
-</details>
+拿到 `dsh-better-sidebar-0.11.0.tgz` 后：
 
-<details>
-<summary><b>常见问题</b></summary>
+```sh
+dsh plugin --profile web add /绝对路径/dsh-better-sidebar-0.11.0.tgz
+```
+
+### 更新
+
+```sh
+cd dsh-better-sidebar
+git pull
+pnpm install
+pnpm build
+cd ~/.dsh/profiles/web
+pnpm install
+```
+
+然后重启 DSH 并硬刷新。
+
+### 常见问题
 
 | 现象 | 原因与解决 |
 |---|---|
-| 报 `Ignored build scripts` | pnpm 11 拦截构建脚本。跑 `pnpm approve-builds --all`（一键脚本已自动处理）。 |
-| 报 `minimum release age` / 版本不足 24h | 装的版本发布不足 24 小时。等 24h 或重跑一次（pnpm 会自动补 `minimumReleaseAgeExclude`）；一键脚本已自动处理。 |
+| 报 `Ignored build scripts` | pnpm 11 拦截构建脚本。在 `~/.dsh/profiles/web` 下执行 `pnpm approve-builds --all` 后重装。 |
+| 报 `minimum release age` / 版本不足 24h | 本地 tarball 或 link 安装一般不受影响；若通过 npm 安装新发布版本，等 24h 或在 `pnpm-workspace.yaml` 加 `minimumReleaseAgeExclude`。 |
 | 报「找不到 profile 目录」 | 先跑一次 `dsh web`，让它初始化 `~/.dsh/profiles/web`。 |
-| 页面出现**两个侧边栏** | 双挂载：`~/.dsh/profiles/web/cordis.patch.yml` 还留着旧的手动挂载行，删掉那段 `- insert: ... better-sidebar ...`（一键脚本会自动清）。 |
+| 页面出现**两个侧边栏** | 双挂载：`~/.dsh/profiles/web/cordis.patch.yml` 还留着旧的手动挂载行，删掉那段 `- insert: ... better-sidebar ...`。 |
 | Windows 下终端无法使用 | `node-pty` 依赖预编译二进制；若当前 Node 版本没有对应产物，需装编译工具链（VS Build Tools）。主流 Node 版本一般已有预编译。 |
-| Windows 没有 bash / curl | 直接用 PowerShell 一键命令；或安装 Git Bash / WSL 再跑 bash 命令。 |
-
-</details>
-
-<details>
-<summary><b>从源码安装 / 开发（可选，替代 npm 方式）</b></summary>
-
-调试本地改动或跟随开发分支时，把依赖指向本地克隆并自行构建：
-
-```text
-1. git clone https://github.com/omdsh-dev/DSH-better-sidebar.git ~/Code/DSH-better-sidebar
-   cd ~/Code/DSH-better-sidebar && pnpm install && pnpm build
-2. ~/.dsh/profiles/web/package.json 的 dependencies 写 "dsh-better-sidebar": "link:<克隆目录绝对路径>"
-3. ~/.dsh/profiles/web/cordis.patch.yml 追加挂载行：
-   - insert:
-       - id: better-sidebar
-         name: 'dsh-better-sidebar'
-4. 在 ~/.dsh/profiles/web 执行 pnpm install
-5. 重启 DSH 并硬刷新
-```
-
-更新：`git pull && pnpm install && pnpm build` → 重启 DSH（仅 client 改动可硬刷新）。切回 npm 通道时，把依赖改回 `"dsh-better-sidebar": "^0.10.3"` 再 `pnpm install`。
-
-</details>
-
-<details>
-<summary><b>通过 plugin-registry 安装（可选，与上述二选一）</b></summary>
-
-前置：DSH 已集成 [plugin-registry](https://github.com/dsh-external/plugin-registry)（`dsh registry` 可用）。**同时启用两个通道会双挂载**（Node 半挂两次、页面两个侧边栏）。
-
-```sh
-git clone https://github.com/omdsh-dev/DSH-better-sidebar.git && cd DSH-better-sidebar
-pnpm install && pnpm build
-node scripts/package-registry.mjs   # 组装 registry/ 暂存（含清单 + 产物 + README，不入库）
-dsh registry install ./registry     # 安装（默认禁用）
-dsh registry enable dsh-external/dsh-better-sidebar
-```
-
-更新：`git pull && pnpm install && pnpm build` → `node scripts/package-registry.mjs` → `dsh registry uninstall/install/enable`。切换通道前先移除另一通道的挂载。
-
-</details>
+| Windows 没有 bash / curl | 使用 Git Bash / WSL，或手动按源码安装步骤操作。 |
 
 ## ⌨️ 快捷键
 

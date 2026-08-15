@@ -16,6 +16,13 @@ https://github.com/user-attachments/assets/23187822-047e-45cc-b480-fe997bd55b86
 
 <img width="2630" height="1794" alt="6c4293e1bec2e935031bf0e986d6ec65" src="https://github.com/user-attachments/assets/dfdb875e-a1a8-4d4b-8340-353736b1708f" />
 
+## 📌 Project Origin
+
+This project is a modified fork of [dsh-better-sidebar](https://github.com/omdsh-dev/DSH-better-sidebar), with the standalone `dsh-sidebar-telemetry` plugin merged in as a built-in Telemetry tab.
+
+- Upstream project: https://github.com/omdsh-dev/DSH-better-sidebar
+- This repository: https://github.com/lihaiyang/dsh-better-sidebar
+
 ## ✨ Features
 
 - **🗂️ File Explorer**: lazy-loading directory tree (root = session cwd), click to open in the sidebar, `@file` reference at end of line into the input box, right-click to copy path
@@ -36,153 +43,81 @@ https://github.com/user-attachments/assets/23187822-047e-45cc-b480-fe997bd55b86
 
 ## 🚀 Installation
 
+> Note: this repository is a modified fork. It is not published to npm under the original `dsh-better-sidebar` package name.
+> Running `dsh plugin --profile web add dsh-better-sidebar` installs the upstream package, not this fork.
+> Use the source install or a local tarball below.
+
 **Prerequisites**: DSH installed (`dsh web` boots), Node.js ≥ 20, pnpm ≥ 10.
 
-**macOS / Linux** (also works in Git Bash / WSL on Windows):
+### Option 1: Install from source / develop (recommended)
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/omdsh-dev/DSH-better-sidebar/main/scripts/install.sh | bash
+git clone https://github.com/lihaiyang/dsh-better-sidebar.git
+cd dsh-better-sidebar
+pnpm install
+pnpm build
 ```
 
-**Windows (PowerShell 5.1+ / pwsh)**:
+Then edit `~/.dsh/profiles/web/package.json` `dependencies`:
 
-```powershell
-irm https://raw.githubusercontent.com/omdsh-dev/DSH-better-sidebar/main/scripts/install.ps1 | iex
+```json
+"dsh-better-sidebar": "link:/absolute/path/to/dsh-better-sidebar"
 ```
 
-Then **restart DSH and hard-refresh** (Cmd/Ctrl+Shift+R) to see the sidebar.
+Append this mount line to `~/.dsh/profiles/web/cordis.patch.yml`:
 
-<details>
-<summary><b>Pin a version / auto-restart (optional)</b></summary>
-
-```sh
-# macOS / Linux
-curl -fsSL https://raw.githubusercontent.com/omdsh-dev/DSH-better-sidebar/main/scripts/install.sh | bash -s 0.10.3 --restart
-
-# Windows PowerShell
-& ([scriptblock]::Create((irm 'https://raw.githubusercontent.com/omdsh-dev/DSH-better-sidebar/main/scripts/install.ps1'))) -Version 0.10.3 -Restart
+```yaml
+- insert:
+    - id: better-sidebar
+      name: 'dsh-better-sidebar'
 ```
 
-Not sure? Add `--dry-run` (`-DryRun` in PowerShell) to preview before running.
-
-</details>
-
-<details>
-<summary><b>Manual install (step by step)</b></summary>
-
-Equivalent to the one-click script. **Step ③ is repeatable; ①② only need to run once.**
-
-**macOS / Linux (bash)**:
+Finally, in the profile directory:
 
 ```sh
 cd ~/.dsh/profiles/web
-
-# ① Allow node-pty / protobufjs build scripts (pnpm 11 blocks them by default; skip on pnpm 10)
-pnpm approve-builds --all
-
-# ② Allow versions published less than 24h ago (skip for older releases; if the key already exists, merge the line under it instead)
-cat >> pnpm-workspace.yaml <<'EOF'
-minimumReleaseAgeExclude:
-  - dsh-better-sidebar
-EOF
-
-# ③ Install and auto-mount (no @version = npm's latest; pin with dsh-better-sidebar@0.10.3)
-npx -y --package @deepseek-ai/dsh dsh plugin --profile web add dsh-better-sidebar
+pnpm install
 ```
 
-**Windows (PowerShell)**:
+Restart DSH and hard-refresh (Cmd/Ctrl+Shift+R).
 
-```powershell
-cd ~\.dsh\profiles\web
-
-# ① Allow build scripts
-pnpm approve-builds --all
-
-# ② Allow fresh releases (once; if the key already exists, merge - dsh-better-sidebar under it instead)
-Add-Content -Path pnpm-workspace.yaml -Value "`nminimumReleaseAgeExclude:`n  - dsh-better-sidebar"
-
-# ③ Install and auto-mount
-npx -y --package @deepseek-ai/dsh dsh plugin --profile web add dsh-better-sidebar
-```
-
-</details>
-
-<details>
-<summary><b>What the script does (technical details)</b></summary>
-
-The one-click script does four things, all idempotent (safe to re-run):
-
-1. Pre-writes `allowBuilds` (node-pty / protobufjs) to dodge pnpm 11's build-script block;
-2. Pre-writes `minimumReleaseAgeExclude` to allow versions younger than 24 hours;
-3. Runs `dsh plugin --profile web add dsh-better-sidebar`: registers the dependency → detects `dsh.bundle.patch` → auto-appends the plugin to `dsh.profile.bundles`;
-4. Removes any leftover hand-written mount line to avoid double-mounting (two sidebars on the page).
-
-`curl | bash` / `irm | iex` executes remote code — the scripts are open source in the repo (`scripts/install.sh` / `scripts/install.ps1`); download and review them first if you prefer. The plugin ships as npm package `dsh-better-sidebar@0.10.3` and mounts via `dsh.bundle.patch` (the shipped `cordis.patch.yml`), so the DSH source is never modified.
-
-</details>
-
-<details>
-<summary><b>Updating</b></summary>
+If you see `Ignored build scripts`, run:
 
 ```sh
-dsh plugin --profile web add dsh-better-sidebar
+cd ~/.dsh/profiles/web
+pnpm approve-builds --all
+pnpm install
 ```
 
-or re-run the one-click script; or bump the version in `~/.dsh/profiles/web/package.json` (e.g. `"^0.10.3"`) and run `pnpm install`. Then restart DSH and hard-refresh (Cmd/Ctrl+Shift+R).
+### Option 2: Install from tarball (when a release tarball is available)
 
-</details>
+```sh
+dsh plugin --profile web add /absolute/path/to/dsh-better-sidebar-0.11.0.tgz
+```
 
-<details>
-<summary><b>Troubleshooting</b></summary>
+### Updating
+
+```sh
+cd dsh-better-sidebar
+git pull
+pnpm install
+pnpm build
+cd ~/.dsh/profiles/web
+pnpm install
+```
+
+Then restart DSH and hard-refresh.
+
+### Troubleshooting
 
 | Symptom | Cause & fix |
 |---|---|
-| `Ignored build scripts` | pnpm 11 blocked build scripts. Run `pnpm approve-builds --all` (the one-click script handles it). |
-| `minimum release age` / version `< 24h` | The release is younger than 24 hours. Wait, or re-run once (pnpm auto-adds `minimumReleaseAgeExclude`); the one-click script handles it. |
+| `Ignored build scripts` | pnpm 11 blocked build scripts. Run `pnpm approve-builds --all` in `~/.dsh/profiles/web` and reinstall. |
+| `minimum release age` / version `< 24h` | Usually not an issue for local tarball/link installs. If installing a fresh npm release, wait 24h or add `minimumReleaseAgeExclude`. |
 | "profile directory not found" | Run `dsh web` once so it initializes `~/.dsh/profiles/web`. |
-| Two sidebars on the page | Double-mount: `~/.dsh/profiles/web/cordis.patch.yml` still has the old hand-written `- insert: ... better-sidebar ...` line — delete it (the one-click script cleans it). |
+| Two sidebars on the page | Double-mount: `~/.dsh/profiles/web/cordis.patch.yml` still has the old hand-written `- insert: ... better-sidebar ...` line — delete it. |
 | Terminal fails on Windows | `node-pty` relies on prebuilt binaries; if none match your Node version, install a build toolchain (VS Build Tools). Mainstream Node versions are usually covered. |
-| No bash / curl on Windows | Use the PowerShell one-click command, or install Git Bash / WSL and run the bash commands. |
-
-</details>
-
-<details>
-<summary><b>Install from source / develop (optional — alternative to the npm flow)</b></summary>
-
-To debug local changes or track the dev branch, point the dependency at a local clone and build it yourself:
-
-```text
-1. git clone https://github.com/omdsh-dev/DSH-better-sidebar.git ~/Code/DSH-better-sidebar
-   cd ~/Code/DSH-better-sidebar && pnpm install && pnpm build
-2. In ~/.dsh/profiles/web/package.json dependencies write "dsh-better-sidebar": "link:<absolute path of the clone>"
-3. Append this mount line to ~/.dsh/profiles/web/cordis.patch.yml:
-   - insert:
-       - id: better-sidebar
-         name: 'dsh-better-sidebar'
-4. Run pnpm install in ~/.dsh/profiles/web
-5. Restart DSH and hard-refresh
-```
-
-Update: `git pull && pnpm install && pnpm build` → restart DSH (client-only changes can just hard-refresh). To switch back to the npm channel, restore `"dsh-better-sidebar": "^0.10.3"` and re-run `pnpm install`.
-
-</details>
-
-<details>
-<summary><b>Install via plugin-registry (optional — use either this or the main flow)</b></summary>
-
-Prerequisite: DSH with [plugin-registry](https://github.com/dsh-external/plugin-registry) integrated (`dsh registry` available). **Enabling both channels double-mounts** (the Node half loads twice, the page gets two sidebars).
-
-```sh
-git clone https://github.com/omdsh-dev/DSH-better-sidebar.git && cd DSH-better-sidebar
-pnpm install && pnpm build
-node scripts/package-registry.mjs   # assemble the registry/ staging (manifest + artifacts + README, not committed)
-dsh registry install ./registry     # install (disabled by default)
-dsh registry enable dsh-external/dsh-better-sidebar
-```
-
-Update: `git pull && pnpm install && pnpm build` → `node scripts/package-registry.mjs` → `dsh registry uninstall/install/enable`. Remove the other channel's mount before switching.
-
-</details>
+| No bash / curl on Windows | Use Git Bash / WSL, or follow the manual source install steps. |
 
 ## ⌨️ Keyboard Shortcuts
 

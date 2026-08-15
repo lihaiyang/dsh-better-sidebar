@@ -1,6 +1,9 @@
 # =============================================================================
 # dsh-better-sidebar 一键安装脚本（官方 CLI 方式，Windows PowerShell 5.1+ / pwsh）
 #
+# 注意：本仓库是修改版，默认未发布到 npm。此脚本面向上游 npm 包流程；
+# 本 fork 请优先按 README 使用源码 link 或本地 tarball 安装。
+#
 # 通过 DSH 官方插件命令安装 npm 包并自动挂载：
 #   dsh plugin --profile web add dsh-better-sidebar@<version>
 #
@@ -11,9 +14,9 @@
 #
 # 用法（任选其一）：
 #   # 默认最新版
-#   irm https://raw.githubusercontent.com/omdsh-dev/DSH-better-sidebar/main/scripts/install.ps1 | iex
+#   irm https://raw.githubusercontent.com/lihaiyang/dsh-better-sidebar/main/scripts/install.ps1 | iex
 #   # 指定版本 / 装完重启
-#   & ([scriptblock]::Create((irm 'https://raw.githubusercontent.com/omdsh-dev/DSH-better-sidebar/main/scripts/install.ps1'))) -Version 0.10.2 -Restart
+#   & ([scriptblock]::Create((irm 'https://raw.githubusercontent.com/lihaiyang/dsh-better-sidebar/main/scripts/install.ps1'))) -Version 0.10.2 -Restart
 #   # 本地保存后运行
 #   powershell -ExecutionPolicy Bypass -File install.ps1 -Version 0.10.2 -DryRun
 #
