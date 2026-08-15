@@ -12,7 +12,7 @@
  * session's authoritative cwd comes from the session store, and terminal
  * processes are keyed by session.
  */
-import { mkdir, open, readFile, rename, rm, stat, writeFile } from 'node:fs/promises'
+import { lstat, mkdir, open, readFile, rename, rm, stat, writeFile } from 'node:fs/promises'
 import { basename, dirname, extname, isAbsolute, join } from 'node:path'
 import type { IncomingMessage } from 'node:http'
 import { WebSocket, WebSocketServer } from 'ws'
@@ -240,6 +240,56 @@ function buildApi(
         throw new SidebarError('fs-error', `cannot write "${path}": ${error instanceof Error ? error.message : String(error)}`, 400)
       }
       return { ok: true }
+    },
+    'fs.delete': async (payload) => {
+      const { cwd } = cwdOf(payload)
+      const path = requireAbsolute(requireString(payload, 'path'))
+      if (path === cwd) {
+        throw new SidebarError('fs-error', 'cannot delete the session working directory', 400)
+      }
+      if (isWithin(cwd, path) === false) {
+        throw new SidebarError('fs-error', 'delete path is outside the session working directory', 403)
+      }
+      try {
+        await rm(path, { recursive: true, force: false })
+      } catch (error) {
+        throw new SidebarError('fs-error', `cannot delete "${path}": ${error instanceof Error ? error.message : String(error)}`, 400)
+      }
+      return { ok: true }
+    },
+    'fs.rename': async (payload) => {
+      const { cwd } = cwdOf(payload)
+      const path = requireAbsolute(requireString(payload, 'path'))
+      const name = requireString(payload, 'name')
+      if (path === cwd) {
+        throw new SidebarError('fs-error', 'cannot rename the session working directory', 400)
+      }
+      if (isWithin(cwd, path) === false) {
+        throw new SidebarError('fs-error', 'rename path is outside the session working directory', 403)
+      }
+      if (name === '' || name === '.' || name === '..' || name.includes('/') || name.includes('\\')) {
+        throw new SidebarError('fs-error', `"${name}" is not a valid file name`, 400)
+      }
+      const target = join(dirname(path), name)
+      if (isWithin(cwd, target) === false) {
+        throw new SidebarError('fs-error', 'rename target is outside the session working directory', 403)
+      }
+      if (target === path) return { ok: true, changed: false }
+      try {
+        await lstat(target)
+        throw new SidebarError('fs-error', `"${target}" already exists`, 400)
+      } catch (error) {
+        if (error instanceof SidebarError) throw error
+        if ((error as NodeJS.ErrnoException).code !== 'ENOENT') {
+          throw new SidebarError('fs-error', `cannot inspect "${target}": ${error instanceof Error ? error.message : String(error)}`, 400)
+        }
+      }
+      try {
+        await rename(path, target)
+      } catch (error) {
+        throw new SidebarError('fs-error', `cannot rename "${path}": ${error instanceof Error ? error.message : String(error)}`, 400)
+      }
+      return { ok: true, path: target }
     },
     'git.status': async (payload) => {
       const { cwd } = cwdOf(payload)

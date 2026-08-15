@@ -120,6 +120,10 @@ export const api = {
     call<FsTextResult | FsBinaryResult>('fs.read', scopePayload(scope, { path }), signal),
   fsWrite: (scope: SessionScope, path: string, content: string) =>
     call<{ ok: true }>('fs.write', scopePayload(scope, { path, content })),
+  fsDelete: (scope: SessionScope, path: string) =>
+    call<{ ok: true }>('fs.delete', scopePayload(scope, { path })),
+  fsRename: (scope: SessionScope, path: string, name: string) =>
+    call<{ ok: true; path: string }>('fs.rename', scopePayload(scope, { path, name })),
   gitStatus: (scope: SessionScope, signal?: AbortSignal) =>
     call<GitStatusResult>('git.status', scopePayload(scope, {}), signal),
   gitDiff: (scope: SessionScope, path: string | undefined, staged: boolean, signal?: AbortSignal) =>
