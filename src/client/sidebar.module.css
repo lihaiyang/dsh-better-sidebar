@@ -25,11 +25,12 @@
   gap: 4px;
 }
 
-/* The tab strip of the OPEN right panel reserves the cluster's width at its
-   right end, so the tabs and the + menu genuinely yield space to the cluster
-   (never hiding under it). */
+/* The tab strip of the OPEN right panel reserves the top-right controls'
+   width at its right end: the 2-button panel cluster (right 10→70) plus the
+   floating file manager's launch button (right 74→102), so the tabs and the
+   + menu genuinely yield space (never hiding under them). */
 .panel:not(.panelHidden) .tabBar {
-  padding-right: 72px;
+  padding-right: 110px;
 }
 
 /* The closed-state affordance is the native rail icon control: a plain
@@ -1913,12 +1914,12 @@
    switches (which panels render, the migration) are JS-driven via
    useNarrowViewport; this block only adapts the pure style details. */
 @media (max-width: 767px) {
-  /* The toggle cluster holds a single button on narrow viewports (the
-     bottom panel button is not rendered), so the open panel's tab strip
-     reserves 40px instead of the desktop 72px — the tabs and + menu still
-     yield space to the one remaining control. */
+  /* On narrow viewports the panel toggle cluster holds a single button
+     (right 10→38) and the file manager's launch button sits at right 42→70,
+     so the open panel's tab strip reserves 78px — the tabs and + menu still
+     yield space to both controls. */
   .panel:not(.panelHidden) .tabBar {
-    padding-right: 40px;
+    padding-right: 78px;
   }
 
   /* Narrower tabs: a phone-width drawer fits more open tabs before the

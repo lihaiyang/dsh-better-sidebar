@@ -1,11 +1,12 @@
 /**
- * Single-level directory listing for the sidebar explorer. Streams the level
- * with opendir, sorts directories first then names (case-insensitive), and
- * marks POSIX-hidden entries (dot-prefixed) for dimmed display. Symlinks are
- * reported as files without probing their target — the explorer shows what
- * dirent says, keeping the read cheap for arbitrarily large levels.
+ * Single-level directory listing for the sidebar explorer / floating file
+ * manager. Streams the level with opendir, sorts directories first then
+ * names (case-insensitive), marks POSIX-hidden entries (dot-prefixed) for
+ * dimmed display, and enriches rows with lstat metadata (size / mtime /
+ * symlink flag) on a best-effort basis. Symlinks are reported as the link
+ * itself, not its target.
  */
-import { opendir } from 'node:fs/promises'
+import { lstat, opendir } from 'node:fs/promises'
 import { basename, dirname, join, resolve } from 'node:path'
 import { SidebarError } from './wire.ts'
 
@@ -15,6 +16,12 @@ export interface SidebarFsEntry {
   path: string
   isDir: boolean
   hidden: boolean
+  /** File size in bytes (undefined for directories). */
+  size?: number
+  /** Last-modified time in epoch milliseconds (undefined while unknown). */
+  mtimeMs?: number
+  /** True when the row is a symlink (the explorer shows the link itself). */
+  symlink?: boolean
 }
 
 /** One listed level. */
@@ -64,6 +71,19 @@ export async function listDirectory(path: string, maxEntries = 1000): Promise<Si
   } catch (error) {
     throw new SidebarError('fs-error', `cannot list "${path}": ${messageOf(error)}`, 400)
   }
+  // Enrich rows with lstat metadata (size / mtime / symlink). Directory
+  // sizes stay undefined; failures degrade to the dirent-only row so one
+  // unreadable entry cannot fail the whole level.
+  await Promise.all(rows.map(async (row) => {
+    try {
+      const info = await lstat(row.path)
+      row.symlink = info.isSymbolicLink()
+      row.mtimeMs = info.mtimeMs
+      if (info.isFile()) row.size = info.size
+    } catch {
+      // Keep the dirent-only row.
+    }
+  }))
   rows.sort(compareEntries)
   return { path, entries: rows, truncated: overflow > 0 }
 }

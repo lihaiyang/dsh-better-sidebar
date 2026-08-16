@@ -1,0 +1,444 @@
+/* Floating file manager window. Parallel surface to the sidebar panels:
+   fixed, above them, draggable by its title bar, resizable from the edges.
+   Visual tokens follow the DSH sidebar chrome (flat, hairline borders). */
+
+.overlay {
+  position: fixed;
+  z-index: 80;
+  display: flex;
+  flex-direction: column;
+  background: var(--dsw-specific-sidebar-fill);
+  border: 1px solid var(--dsw-alias-border-l2);
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+.overlayMaximized {
+  border: none;
+  border-radius: 0;
+}
+
+.hiddenOverlay {
+  display: none;
+}
+
+.titleBar {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 38px;
+  padding: 0 8px 0 14px;
+  border-bottom: 1px solid var(--dsw-alias-border-l1);
+  cursor: grab;
+  user-select: none;
+  font: var(--dsw-font-s-strong-14);
+  color: var(--dsw-alias-label-primary);
+}
+
+.titleBar:active {
+  cursor: grabbing;
+}
+
+.titleIcon {
+  flex: none;
+  display: flex;
+  align-items: center;
+  color: var(--dsw-alias-label-secondary);
+}
+
+.titleText {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.windowButton {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border: none;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--dsw-alias-label-secondary);
+  cursor: pointer;
+  transition:
+    background var(--ds-transition-duration-slow) var(--ds-ease-in-out),
+    color var(--ds-transition-duration-slow) var(--ds-ease-in-out);
+}
+
+.windowButton:hover {
+  background: var(--dsw-alias-interactive-bg-hover);
+  color: var(--dsw-alias-label-primary);
+}
+
+.toolbar {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 40px;
+  padding: 0 10px;
+  border-bottom: 1px solid var(--dsw-alias-border-l1);
+}
+
+.toolButton {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border: none;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--dsw-alias-label-secondary);
+  cursor: pointer;
+}
+
+.toolButton:hover:not(:disabled) {
+  background: var(--dsw-alias-interactive-bg-hover);
+  color: var(--dsw-alias-label-primary);
+}
+
+.toolButton:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.pathInput {
+  flex: 1;
+  min-width: 0;
+}
+
+.textButton {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  height: 24px;
+  padding: 0 8px;
+  border: 1px solid var(--dsw-alias-border-l1);
+  border-radius: 999px;
+  background: var(--dsw-alias-bg-layer-2);
+  color: var(--dsw-alias-label-secondary);
+  font: var(--dsw-font-xxxs-strong-11);
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.textButton:hover {
+  background: var(--dsw-alias-interactive-bg-hover);
+  color: var(--dsw-alias-label-primary);
+}
+
+.main {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+}
+
+.listPane {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  border-right: 1px solid var(--dsw-alias-border-l1);
+}
+
+.columnHeader {
+  flex: none;
+  display: flex;
+  align-items: center;
+  height: 28px;
+  padding: 0 8px;
+  border-bottom: 1px solid var(--dsw-alias-border-l1);
+  font: var(--dsw-font-xxxs-strong-11);
+  color: var(--dsw-alias-label-tertiary);
+  gap: 6px;
+}
+
+.colName {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  cursor: pointer;
+  user-select: none;
+}
+
+.colSize {
+  flex: none;
+  width: 82px;
+  text-align: right;
+  cursor: pointer;
+  user-select: none;
+}
+
+.colMtime {
+  flex: none;
+  width: 126px;
+  text-align: right;
+  cursor: pointer;
+  user-select: none;
+}
+
+.fileList {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 2px 6px 8px;
+}
+
+.row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 30px;
+  padding: 0 8px;
+  border: none;
+  background: transparent;
+  font: var(--dsw-font-s-14);
+  color: var(--dsw-alias-label-primary);
+  text-align: left;
+  cursor: default;
+  white-space: nowrap;
+  border-radius: 8px;
+}
+
+.row:hover {
+  background: var(--dsw-alias-interactive-bg-hover);
+}
+
+.rowSelected {
+  background: var(--dsw-alias-interactive-bg-selected, var(--dsw-alias-interactive-bg-hover));
+}
+
+.rowHidden {
+  opacity: 0.45;
+}
+
+.name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.size {
+  flex: none;
+  width: 82px;
+  text-align: right;
+  font: var(--dsw-font-xxs-12);
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.mtime {
+  flex: none;
+  width: 126px;
+  text-align: right;
+  font: var(--dsw-font-xxs-12);
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.empty {
+  padding: 24px 12px;
+  font: var(--dsw-font-xxs-12);
+  color: var(--dsw-alias-label-tertiary);
+  text-align: center;
+}
+
+.previewPane {
+  flex: 1;
+  min-width: 220px;
+  display: flex;
+  flex-direction: column;
+  background: var(--dsw-alias-bg-layer-1, transparent);
+}
+
+.previewDivider {
+  flex: none;
+  width: 6px;
+  cursor: col-resize;
+  touch-action: none;
+  background: transparent;
+  border-left: 1px solid var(--dsw-alias-border-l1);
+  z-index: 1;
+}
+
+.previewDivider:hover,
+.previewDividerActive {
+  background: var(--dsw-alias-interactive-bg-hover-accent);
+}
+
+.previewHeader {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  height: 28px;
+  padding: 0 4px 0 12px;
+  border-bottom: 1px solid var(--dsw-alias-border-l1);
+  font: var(--dsw-font-xxxs-strong-11);
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.previewTitle {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.previewActions {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.ratioButton {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 26px;
+  height: 20px;
+  padding: 0 5px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--dsw-alias-label-tertiary);
+  font: var(--dsw-font-xxxs-strong-11);
+  cursor: pointer;
+}
+
+.ratioButton:hover {
+  background: var(--dsw-alias-interactive-bg-hover);
+  color: var(--dsw-alias-label-primary);
+}
+
+.previewBody {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.statusBar {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  height: 30px;
+  padding: 0 12px;
+  border-top: 1px solid var(--dsw-alias-border-l1);
+  font: var(--dsw-font-xxxs-11);
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.statusSpacer {
+  flex: 1;
+}
+
+.statusButton {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  height: 22px;
+  padding: 0 8px;
+  border: none;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--dsw-alias-label-secondary);
+  font: var(--dsw-font-xxxs-strong-11);
+  cursor: pointer;
+}
+
+.statusButton:hover {
+  background: var(--dsw-alias-interactive-bg-hover);
+  color: var(--dsw-alias-label-primary);
+}
+
+.dialogError {
+  margin-top: 8px;
+  font: var(--dsw-font-xxs-12);
+  color: var(--dsw-alias-state-error-primary);
+}
+
+.confirmDesc {
+  margin: 0;
+  font: var(--dsw-font-s-14);
+  color: var(--dsw-alias-label-primary);
+  white-space: pre-wrap;
+}
+
+/* Resize handles */
+.resizeN, .resizeS {
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 6px;
+  cursor: ns-resize;
+  touch-action: none;
+}
+.resizeN { top: -3px; }
+.resizeS { bottom: -3px; }
+.resizeE, .resizeW {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 6px;
+  cursor: ew-resize;
+  touch-action: none;
+}
+.resizeE { right: -3px; }
+.resizeW { left: -3px; }
+.resizeNe, .resizeNw, .resizeSe, .resizeSw {
+  position: absolute;
+  width: 10px;
+  height: 10px;
+  touch-action: none;
+}
+.resizeNe { top: -4px; right: -4px; cursor: nesw-resize; }
+.resizeNw { top: -4px; left: -4px; cursor: nwse-resize; }
+.resizeSe { bottom: -4px; right: -4px; cursor: nwse-resize; }
+.resizeSw { bottom: -4px; left: -4px; cursor: nesw-resize; }
+
+/* The always-visible launch button: pinned to the same top-right band as the
+   sidebar's panel cluster, sitting LEFT of it. On narrow viewports the bottom
+   panel button is absent, so the button sits closer to the corner. */
+.toggleButton {
+  position: fixed;
+  top: 3px;
+  right: 74px;
+  z-index: 56;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border: none;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--dsw-alias-label-secondary);
+  cursor: pointer;
+  transition:
+    background var(--ds-transition-duration-slow) var(--ds-ease-in-out),
+    color var(--ds-transition-duration-slow) var(--ds-ease-in-out);
+}
+
+.toggleButton:hover,
+.toggleButtonActive {
+  background: var(--dsw-alias-interactive-bg-hover);
+  color: var(--dsw-alias-label-primary);
+}
+
+@media (max-width: 767px) {
+  .toggleButton {
+    right: 42px;
+  }
+}

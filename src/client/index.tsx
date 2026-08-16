@@ -18,9 +18,11 @@ import { registerBuiltins } from './builtins/index.ts'
 import { Sidebar } from './Sidebar.tsx'
 import { registerOpenPathInterception, registerTurnTailInterception } from './intercept.tsx'
 import { registerLinkInterception } from './link-intercept.ts'
-import { registerImeGuard } from './ime-guard.ts'
+import { isImeComposition, registerImeGuard } from './ime-guard.ts'
 import { loadPrefs } from './prefs.ts'
 import { SideCardSection } from './SideCardSection.tsx'
+import { FileManagerWindow } from './file-manager/FileManagerWindow.tsx'
+import { createFileManagerStore } from './file-manager/store.ts'
 import { api } from './api.ts'
 import { LOCALE_NS, attachLocale, t, zh, en } from './locales.ts'
 import {
@@ -95,6 +97,9 @@ export function apply(ctx: Context): void {
   // registrations (the official createXXXStore() factory rule — no
   // module-level singleton).
   const sidebarStore = createSidebarStore()
+  // The floating file manager's own global store: parallel to the sidebar,
+  // not per-session.
+  const fileManagerStore = createFileManagerStore()
   // The sidebar registry service: external plugins register tab types and
   // file previewers through `ctx.betterSidebar.registerTab/registerFileViewer`.
   // Published before the panel mounts so consumers injecting 'betterSidebar'
@@ -150,7 +155,10 @@ export function apply(ctx: Context): void {
           host.setAttribute('data-dsh-better-sidebar', '')
           document.body.appendChild(host)
           root = createRoot(host)
-          root.render(createElement(SidebarBoundary, null, createElement(Sidebar, { ctx, store: sidebarStore })))
+          root.render(createElement(SidebarBoundary, null,
+            createElement(Sidebar, { ctx, store: sidebarStore }),
+            createElement(FileManagerWindow, { ctx, store: sidebarStore, fmStore: fileManagerStore }),
+          ))
         } catch (error) {
           fail('mount', error)
         }
@@ -208,6 +216,35 @@ export function apply(ctx: Context): void {
         }
       },
       'dsh-better-sidebar: link interception',
+    )
+
+    // Global file-manager hotkey: Ctrl/Cmd+Shift+E toggles the floating
+    // window from anywhere except while typing or composing.
+    ctx.effect(
+      () => {
+        try {
+          const isEditableTarget = (target: EventTarget | null): boolean => {
+            if (!(target instanceof HTMLElement)) return false
+            if (target.isContentEditable) return true
+            const tag = target.tagName
+            return tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT'
+          }
+          const onKeyDown = (event: KeyboardEvent): void => {
+            if (isImeComposition(event)) return
+            if (isEditableTarget(event.target)) return
+            if ((event.ctrlKey || event.metaKey) && event.shiftKey && (event.key === 'E' || event.key === 'e')) {
+              event.preventDefault()
+              fileManagerStore.toggle()
+            }
+          }
+          window.addEventListener('keydown', onKeyDown, true)
+          return () => { window.removeEventListener('keydown', onKeyDown, true) }
+        } catch (error) {
+          fail('file manager hotkey', error)
+          return undefined
+        }
+      },
+      'dsh-better-sidebar: file-manager hotkey',
     )
 
     // The IME guard: composition keys (candidate arrows, confirm, cancel)

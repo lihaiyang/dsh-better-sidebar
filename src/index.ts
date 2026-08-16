@@ -12,7 +12,7 @@
  * session's authoritative cwd comes from the session store, and terminal
  * processes are keyed by session.
  */
-import { lstat, mkdir, open, readFile, rename, rm, stat, writeFile } from 'node:fs/promises'
+import { cp, lstat, mkdir, open, readFile, rename, rm, stat, writeFile } from 'node:fs/promises'
 import { basename, dirname, extname, isAbsolute, join } from 'node:path'
 import type { IncomingMessage } from 'node:http'
 import { WebSocket, WebSocketServer } from 'ws'
@@ -118,6 +118,31 @@ function sessionCwdOf(ctx: Context, sessionId: string, clientCwd?: string): stri
   return process.cwd()
 }
 
+/** Whether a path is inside the session cwd or one of the file-manager's
+ *  explicitly trusted roots. The floating file manager grants global trust
+ *  per opened directory; the session cwd is always trusted. */
+function isTrustedFor(cwd: string, path: string, trustedRoots: ReadonlySet<string>): boolean {
+  if (isWithin(cwd, path)) return true
+  for (const root of trustedRoots) {
+    if (isWithin(root, path)) return true
+  }
+  return false
+}
+
+/** Verify a path is an existing directory and add it to the global trust set. */
+async function trustDirectory(path: string, trustedRoots: Set<string>): Promise<void> {
+  let info
+  try {
+    info = await stat(path)
+  } catch (error) {
+    throw new SidebarError('fs-error', `cannot open "${path}": ${error instanceof Error ? error.message : String(error)}`, 400)
+  }
+  if (!info.isDirectory()) {
+    throw new SidebarError('fs-error', `"${path}" is not a directory`, 400)
+  }
+  trustedRoots.add(path)
+}
+
 /**
  * Resolve a path that a git command reported — `git status`/`git diff`
  * print paths RELATIVE TO THE REPO TOP LEVEL, which may sit above the
@@ -133,6 +158,27 @@ async function resolveGitPath(cwd: string, raw: string): Promise<string> {
 
 /** How many leading bytes a binary read returns for client-side detect sniffing. */
 const READ_HEAD_LIMIT = 4096
+
+/** Decode a read buffer as text when its BOM/NUL pattern is textual. UTF-8
+ *  BOM and UTF-16 LE/BE BOM are decoded as text (otherwise UTF-16 HTML/JS
+ *  files would be misclassified as binary by the NUL probe). */
+function decodeTextBuffer(slice: Buffer): { binary: boolean; text: string } {
+  if (slice.length >= 2) {
+    const b0 = slice[0]!
+    const b1 = slice[1]!
+    if ((b0 === 0xff && b1 === 0xfe) || (b0 === 0xfe && b1 === 0xff)) {
+      const bytes = Buffer.from(slice)
+      if (b0 === 0xfe && b1 === 0xff) bytes.swap16()
+      return { binary: false, text: bytes.toString('utf16le').replace(/^\uFEFF/, '') }
+    }
+  }
+  if (slice.length >= 3 && slice[0] === 0xef && slice[1] === 0xbb && slice[2] === 0xbf) {
+    return { binary: false, text: slice.subarray(3).toString('utf8') }
+  }
+  return slice.includes(0)
+    ? { binary: true, text: '' }
+    : { binary: false, text: slice.toString('utf8') }
+}
 
 /** Text read of a file with the size cap; binary detection via NUL probe.
  *  Binary reads also return the first {@link READ_HEAD_LIMIT} bytes (base64)
@@ -159,11 +205,11 @@ async function readText(path: string, readLimit: number): Promise<{
     const buffer = Buffer.alloc(Math.min(size, readLimit))
     const { bytesRead } = await handle.read(buffer, 0, buffer.length, 0)
     const slice = buffer.subarray(0, bytesRead)
-    const binary = slice.includes(0)
-    const head = binary
+    const decoded = decodeTextBuffer(slice)
+    const head = decoded.binary
       ? slice.subarray(0, Math.min(slice.length, READ_HEAD_LIMIT)).toString('base64')
       : undefined
-    return { content: binary ? '' : slice.toString('utf8'), truncated, binary, size, head }
+    return { content: decoded.text, truncated, binary: decoded.binary, size, head }
   } finally {
     await handle.close()
   }
@@ -193,6 +239,7 @@ function buildApi(
   agentPtyRegistry: AgentPtyRegistry,
   resolved: ResolvedSidebarConfig,
   getSettings: () => SidebarSettingsFace | undefined,
+  trustedRoots: Set<string>,
 ): Record<string, ApiMethod> {
   const cwdOf = (payload: unknown): { sessionId: string; cwd: string } => {
     const sessionId = requireString(payload, 'sessionId')
@@ -200,6 +247,11 @@ function buildApi(
     const clientCwd = typeof record?.cwd === 'string' && record.cwd !== '' ? record.cwd : undefined
     return { sessionId, cwd: sessionCwdOf(ctx, sessionId, clientCwd) }
   }
+  /** Write-operation fence: the session cwd plus every directory the floating
+   *  file manager explicitly trusted. Read routes stay permissive because the
+   *  browser/editor media routes already fence, and `fs.tree` browsing is
+   *  read-only. */
+  const isWritable = (cwd: string, path: string): boolean => isTrustedFor(cwd, path, trustedRoots)
   // Background jobs: the LIST rides the harness's `session/jobs` push
   // mirror, so these routes only replay output the model has read (from the
   // session's own event log — no DSH source is touched, the model's
@@ -215,7 +267,65 @@ function buildApi(
       const { cwd } = cwdOf(payload)
       const record = payload as { path?: unknown }
       const target = record.path === undefined ? cwd : requireAbsolute(requireString(payload, 'path'))
-      return listDirectory(target, resolved.listLimit)
+      const listing = await listDirectory(target, resolved.listLimit)
+      // Successfully browsing a directory grants the floating file manager's
+      // global trust for it. This also closes the race where the iframe/media
+      // preview request starts before the explicit fs.trust call lands.
+      trustedRoots.add(listing.path)
+      return listing
+    },
+    // Global trust for the floating file manager: once a directory is
+    // trusted, write operations under it are allowed for every session.
+    'fs.trust': async (payload) => {
+      const path = requireAbsolute(requireString(payload, 'path'))
+      await trustDirectory(path, trustedRoots)
+      return { ok: true }
+    },
+    'fs.mkdir': async (payload) => {
+      const { cwd } = cwdOf(payload)
+      const path = requireAbsolute(requireString(payload, 'path'))
+      if (!isWritable(cwd, path)) {
+        throw new SidebarError('fs-error', 'mkdir path is outside the trusted roots', 403)
+      }
+      try {
+        await mkdir(path, { recursive: true })
+      } catch (error) {
+        throw new SidebarError('fs-error', `cannot create directory "${path}": ${error instanceof Error ? error.message : String(error)}`, 400)
+      }
+      return { ok: true, path }
+    },
+    'fs.create': async (payload) => {
+      const { cwd } = cwdOf(payload)
+      const path = requireAbsolute(requireString(payload, 'path'))
+      if (!isWritable(cwd, path)) {
+        throw new SidebarError('fs-error', 'create path is outside the trusted roots', 403)
+      }
+      const record = payload as { content?: unknown } | null
+      const content = typeof record?.content === 'string' ? record.content : ''
+      try {
+        await mkdir(dirname(path), { recursive: true })
+        await writeFile(path, content, { encoding: 'utf8', flag: 'wx' })
+      } catch (error) {
+        throw new SidebarError('fs-error', `cannot create file "${path}": ${error instanceof Error ? error.message : String(error)}`, 400)
+      }
+      return { ok: true, path }
+    },
+    'fs.copy': async (payload) => {
+      const { cwd } = cwdOf(payload)
+      const path = requireAbsolute(requireString(payload, 'path'))
+      const target = requireAbsolute(requireString(payload, 'target'))
+      if (path === target) {
+        throw new SidebarError('fs-error', 'source and target are the same path', 400)
+      }
+      if (!isWritable(cwd, path) || !isWritable(cwd, target)) {
+        throw new SidebarError('fs-error', 'copy path is outside the trusted roots', 403)
+      }
+      try {
+        await cp(path, target, { recursive: true, force: false, errorOnExist: true })
+      } catch (error) {
+        throw new SidebarError('fs-error', `cannot copy "${path}": ${error instanceof Error ? error.message : String(error)}`, 400)
+      }
+      return { ok: true, path: target }
     },
     'fs.read': async (payload) => {
       const { cwd } = cwdOf(payload)
@@ -223,6 +333,10 @@ function buildApi(
       // names; the untracked diff view reads the file through this route).
       const path = await resolveGitPath(cwd, requireString(payload, 'path'))
       const { content, truncated, binary, size, head } = await readText(path, resolved.readLimit)
+      // Reading a file outside the session cwd (the file manager's edit mode)
+      // must also grant preview trust to its directory, so the subsequent
+      // html/media iframe request passes the fence.
+      trustedRoots.add(dirname(path))
       if (binary) return { kind: 'binary', size, truncated, head }
       return { kind: 'text', content, truncated }
     },
@@ -247,8 +361,8 @@ function buildApi(
       if (path === cwd) {
         throw new SidebarError('fs-error', 'cannot delete the session working directory', 400)
       }
-      if (isWithin(cwd, path) === false) {
-        throw new SidebarError('fs-error', 'delete path is outside the session working directory', 403)
+      if (!isWritable(cwd, path)) {
+        throw new SidebarError('fs-error', 'delete path is outside the trusted roots', 403)
       }
       try {
         await rm(path, { recursive: true, force: false })
@@ -264,15 +378,15 @@ function buildApi(
       if (path === cwd) {
         throw new SidebarError('fs-error', 'cannot rename the session working directory', 400)
       }
-      if (isWithin(cwd, path) === false) {
-        throw new SidebarError('fs-error', 'rename path is outside the session working directory', 403)
+      if (!isWritable(cwd, path)) {
+        throw new SidebarError('fs-error', 'rename path is outside the trusted roots', 403)
       }
       if (name === '' || name === '.' || name === '..' || name.includes('/') || name.includes('\\')) {
         throw new SidebarError('fs-error', `"${name}" is not a valid file name`, 400)
       }
       const target = join(dirname(path), name)
-      if (isWithin(cwd, target) === false) {
-        throw new SidebarError('fs-error', 'rename target is outside the session working directory', 403)
+      if (!isWritable(cwd, target)) {
+        throw new SidebarError('fs-error', 'rename target is outside the trusted roots', 403)
       }
       if (target === path) return { ok: true, changed: false }
       try {
@@ -556,7 +670,11 @@ export function apply(ctx: Context, config?: SidebarConfig): void {
   })
 
   // ── JSON API ────────────────────────────────────────────────────────────
-  const api = buildApi(ctx, ptyManager, agentPtyRegistry, resolved, () => settingsFace)
+  // Directories the floating file manager has explicitly opened are trusted
+  // globally (in-memory): write routes and media/html previews accept paths
+  // under them in addition to the session cwd.
+  const trustedRoots = new Set<string>()
+  const api = buildApi(ctx, ptyManager, agentPtyRegistry, resolved, () => settingsFace, trustedRoots)
   ctx.effect(() => ctx.webServer.register({
     kind: 'prefix',
     path: '/sidebar/api',
@@ -616,12 +734,12 @@ export function apply(ctx: Context, config?: SidebarConfig): void {
         if (sessionId === null || raw === null) throw new SidebarError('bad-request', 'sessionId and path are required')
         const cwd = sessionCwdOf(ctx, sessionId, url.searchParams.get('cwd') ?? undefined)
         const path = requireAbsolute(raw)
-        if (!isWithin(cwd, path)) {
-          // Only files under the session cwd are served as media (the editor
-          // opens images from the explorer; produced files go through read).
-          // isWithin (not a raw startsWith) so case-mismatched Windows paths
-          // and mixed separators cannot be misclassified.
-          throw new SidebarError('fs-error', 'media path outside the session working directory', 403)
+        if (!isTrustedFor(cwd, path, trustedRoots)) {
+          // Only files under the session cwd or a file-manager-trusted
+          // directory are served as media. isWithin (not a raw startsWith)
+          // so case-mismatched Windows paths and mixed separators cannot be
+          // misclassified.
+          throw new SidebarError('fs-error', 'media path outside the trusted roots', 403)
         }
         const info = await stat(path)
         if (!info.isFile() || info.size > resolved.mediaLimit) {
@@ -674,15 +792,15 @@ export function apply(ctx: Context, config?: SidebarConfig): void {
           writeError(res, new SidebarError('bad-request', decoded.message, decoded.status))
           return
         }
-        const { sessionId, path } = decoded.ref
+        const { sessionId, path, unsafe: htmlUnsafe } = decoded.ref
         // The session's authoritative cwd (client cwd cannot ride in the URL
         // — the path encoding has no query; a detached first request falls
         // back to the process cwd and is normally refused by isWithin, same
         // semantics as the media route's fallback).
         const cwd = sessionCwdOf(ctx, sessionId)
         const absolute = requireAbsolute(path)
-        if (!isWithin(cwd, absolute)) {
-          throw new SidebarError('fs-error', 'html path outside the session working directory', 403)
+        if (!isTrustedFor(cwd, absolute, trustedRoots)) {
+          throw new SidebarError('fs-error', 'html path outside the trusted roots', 403)
         }
         const info = await stat(absolute)
         if (!info.isFile() || info.size > resolved.mediaLimit) {
@@ -697,8 +815,13 @@ export function apply(ctx: Context, config?: SidebarConfig): void {
           'referrer-policy': 'no-referrer',
           // The sandbox directive (no allow-same-origin → opaque origin) is
           // the previewer's security boundary even for top-level loads;
-          // object-src 'none' blocks plugin embeds.
-          'content-security-policy': "sandbox allow-scripts allow-popups allow-downloads allow-modals; object-src 'none'",
+          // object-src 'none' blocks plugin embeds. The UNSAFE variant (the
+          // file manager's default-open HTML preview) drops the sandbox so
+          // the page runs as a normal same-origin document — only for
+          // explicitly trusted directories.
+          'content-security-policy': htmlUnsafe
+            ? "object-src 'none'"
+            : "sandbox allow-scripts allow-popups allow-downloads allow-modals; object-src 'none'",
         })
         res.end(body)
       } catch (error) {

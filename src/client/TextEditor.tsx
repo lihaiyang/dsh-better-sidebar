@@ -355,7 +355,7 @@ export function TextEditor(props: FileViewerProps) {
               file; the draft is only visible in edit mode. */}
           <iframe
             className={css.editorHtml}
-            src={htmlUrl(scope, path)}
+            src={htmlUrl(scope, path, htmlNoSandbox)}
             sandbox={htmlNoSandbox ? undefined : HTML_IFRAME_SANDBOX}
             referrerPolicy="no-referrer"
             allow=""

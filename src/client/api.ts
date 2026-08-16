@@ -25,6 +25,12 @@ export interface FsEntry {
   path: string
   isDir: boolean
   hidden: boolean
+  /** File size in bytes (undefined for directories). */
+  size?: number
+  /** Last-modified time in epoch milliseconds (undefined while unknown). */
+  mtimeMs?: number
+  /** True when the row is a symlink (shown as the link itself). */
+  symlink?: boolean
 }
 
 /** Git status entry (host git shape). */
@@ -124,6 +130,15 @@ export const api = {
     call<{ ok: true }>('fs.delete', scopePayload(scope, { path })),
   fsRename: (scope: SessionScope, path: string, name: string) =>
     call<{ ok: true; path: string }>('fs.rename', scopePayload(scope, { path, name })),
+  /** Grant global write trust to a directory (the floating file manager). */
+  fsTrust: (scope: SessionScope, path: string) =>
+    call<{ ok: true }>('fs.trust', scopePayload(scope, { path })),
+  fsMkdir: (scope: SessionScope, path: string) =>
+    call<{ ok: true; path: string }>('fs.mkdir', scopePayload(scope, { path })),
+  fsCreate: (scope: SessionScope, path: string, content?: string) =>
+    call<{ ok: true; path: string }>('fs.create', scopePayload(scope, { path, ...(content !== undefined ? { content } : {}) })),
+  fsCopy: (scope: SessionScope, path: string, target: string) =>
+    call<{ ok: true; path: string }>('fs.copy', scopePayload(scope, { path, target })),
   gitStatus: (scope: SessionScope, signal?: AbortSignal) =>
     call<GitStatusResult>('git.status', scopePayload(scope, {}), signal),
   gitDiff: (scope: SessionScope, path: string | undefined, staged: boolean, signal?: AbortSignal) =>
@@ -213,7 +228,8 @@ function fileUrl(scope: SessionScope, path: string, download: boolean): string {
 
 /** Absolute URL of the HTML preview route (see html-route.ts): the path is
  *  fully encoded so the previewed page's relative assets resolve back into
- *  the same route with the session scope intact. */
-export function htmlUrl(scope: SessionScope, path: string): string {
-  return encodeHtmlUrl(scope.sessionId, path)
+ *  the same route with the session scope intact. `unsafe` selects the
+ *  no-CSP-sandbox variant (the floating file manager's default). */
+export function htmlUrl(scope: SessionScope, path: string, unsafe = false): string {
+  return encodeHtmlUrl(scope.sessionId, path, unsafe)
 }

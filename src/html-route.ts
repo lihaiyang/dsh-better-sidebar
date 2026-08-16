@@ -25,6 +25,8 @@ export interface HtmlRouteRef {
   sessionId: string
   /** Absolute file path (leading slash; Windows drives keep their colon). */
   path: string
+  /** True when the URL requests the UNSAFE variant (no CSP sandbox). */
+  unsafe: boolean
 }
 
 /** Decode outcome: the reference, or a client-error description. */
@@ -35,10 +37,15 @@ export type HtmlDecodeResult =
 /** The route prefix both encoders/decoders agree on. */
 export const HTML_ROUTE_PREFIX = '/sidebar/html/'
 
-/** Build the route URL for one absolute file path (client + tests). */
-export function encodeHtmlUrl(sessionId: string, path: string): string {
+/** Build the route URL for one absolute file path (client + tests).
+ *  `unsafe` selects the no-CSP-sandbox variant for the file manager's
+ *  default-open HTML preview; the extra path segment keeps relative asset
+ *  resolution inside the same variant (a query string would be dropped by
+ *  the WHATWG URL algorithm on path-relative references). */
+export function encodeHtmlUrl(sessionId: string, path: string, unsafe = false): string {
   const segments = path.split(/[\\/]+/).filter(segment => segment !== '')
-  return `${HTML_ROUTE_PREFIX}${encodeURIComponent(sessionId)}/${segments.map(encodeURIComponent).join('/')}`
+  const variant = unsafe ? 'unsafe/' : ''
+  return `${HTML_ROUTE_PREFIX}${variant}${encodeURIComponent(sessionId)}/${segments.map(encodeURIComponent).join('/')}`
 }
 
 /**
@@ -52,9 +59,14 @@ export function decodeHtmlUrl(pathname: string): HtmlDecodeResult {
   if (!pathname.startsWith(HTML_ROUTE_PREFIX)) {
     return { ok: false, status: 404, message: 'not an html route' }
   }
-  const rest = pathname.slice(HTML_ROUTE_PREFIX.length)
+  let rest = pathname.slice(HTML_ROUTE_PREFIX.length)
   if (rest === '' || rest.includes('//')) {
     return { ok: false, status: 400, message: 'invalid html route path' }
+  }
+  let unsafe = false
+  if (rest.startsWith('unsafe/')) {
+    unsafe = true
+    rest = rest.slice('unsafe/'.length)
   }
   let segments: string[]
   try {
@@ -66,5 +78,9 @@ export function decodeHtmlUrl(pathname: string): HtmlDecodeResult {
   if (sessionId === undefined || sessionId === '' || pathSegments.length === 0 || pathSegments.some(segment => segment === '')) {
     return { ok: false, status: 400, message: 'sessionId and file path are required' }
   }
-  return { ok: true, ref: { sessionId, path: `/${pathSegments.join('/')}` } }
+  // Windows drive paths (C:/Users/...) must not get a POSIX leading slash;
+  // POSIX paths need one (the pathSegments join drops it).
+  const joined = pathSegments.join('/')
+  const path = /^[A-Za-z]:$/.test(pathSegments[0]!) ? joined : `/${joined}`
+  return { ok: true, ref: { sessionId, path, unsafe } }
 }

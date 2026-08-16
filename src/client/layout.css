@@ -33,17 +33,18 @@
   transition: margin-bottom var(--ds-transition-duration-slow) var(--ds-ease-in-out);
 }
 
-/* When the sidebar is collapsed, the toggle cluster reclaims the top-right
-   corner. Push the DSH session header's right padding out so its right-aligned
-   utilities (the "Session log" download capsule) yield the corner instead of
-   hiding under the cluster. The header default right-pads 28px; the 2-button
-   cluster spans right 10→70px, so 78px clears it with an 8px gap. Anchor on
-   the header's slot host wrapper ([data-slot="conversation.session.header"])
+/* When the sidebar is collapsed, the top-right controls reclaim the corner:
+   the 2-button panel cluster (right 10→70px) plus the floating file
+   manager's launch button (right 74→102px) span 10→102px. Push the DSH
+   session header's right padding out so its right-aligned utilities (the
+   "Session log" download capsule) yield the corner instead of hiding under
+   them. 110px clears the combined span with an 8px gap. Anchor on the
+   header's slot host wrapper ([data-slot="conversation.session.header"])
    rather than a positional path: DSH 0.1.x nests the header several levels
-   under the center column. The Sidebar shell toggles the body attribute with
-   the panel open state. */
+   under the center column. The Sidebar shell toggles the body attribute
+   with the panel open state. */
 body[data-dsh-sidebar-collapsed] [data-slot="conversation.session.header"] > header {
-  padding-right: 78px;
+  padding-right: 110px;
 }
 
 body[data-dsh-sidebar-dragging] #root,
