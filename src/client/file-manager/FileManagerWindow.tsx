@@ -819,6 +819,7 @@ export function FileManagerWindow(props: {
 
       {/* Quick-access dropdown (recent + favorites). */}
       <Menu
+        className={css.menuAnchor}
         open={quickMenuOpen}
         onClose={() => { setQuickMenuOpen(false) }}
         items={quickItems}
@@ -841,6 +842,7 @@ export function FileManagerWindow(props: {
 
       {/* Context menu. */}
       <Menu
+        className={css.menuAnchor}
         open={rowMenu !== null}
         onClose={() => { setRowMenu(null) }}
         items={menuItems}
